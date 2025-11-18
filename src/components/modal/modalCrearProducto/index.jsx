@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import TargetProduct from "../../targetProduct";
 import Alert from "../../alert";
 
-export default function ModalCrearProducto({ onClose, isOpen, onCreated, onUpdated, type, product }) {
+export default function ModalCrearProducto({ onClose, isOpen, onCreated, type, product }) {
     const [nombre, setNombre] = useState("");
     const [id, setId] = useState(null);
     const [valor, setValor] = useState(0);
@@ -15,7 +15,7 @@ export default function ModalCrearProducto({ onClose, isOpen, onCreated, onUpdat
     const [createdProduct, setCreatedProduct] = useState(null);
 
     useEffect(() => {
-        
+
         if (isOpen && product) {
             setId(product.id ?? null);
             setNombre(product.nombre ?? "");
@@ -26,7 +26,6 @@ export default function ModalCrearProducto({ onClose, isOpen, onCreated, onUpdat
             setDescripcion(product.descripcion ?? "");
         }
         if (!isOpen) {
-            // reset form when closed
             setNombre("");
             setValor(0);
             setStock(0);
@@ -40,21 +39,19 @@ export default function ModalCrearProducto({ onClose, isOpen, onCreated, onUpdat
 
     if (!isOpen) return null;
 
-    function getNegocioIdFromLocalStorage() {
-        const cuenta = localStorage.getItem("cuentaUsuario");
+    function obtenerIdNegocio() {
+        const cuenta = localStorage.getItem("cuenta");
         if (!cuenta) return null;
         try {
             const parsed = JSON.parse(cuenta);
-            if (parsed && parsed.negocio && parsed.negocio.id) return parsed.negocio.id;
-            return Number(parsed) || null;
+            if (parsed && parsed.id_negocio) return parsed.id_negocio;
         } catch {
-            const asNum = Number(cuenta);
-            return isNaN(asNum) ? cuenta : asNum;
+            return "error, no se pudo ";
         }
     }
 
-    function construirProductoParaEditar(){
-        const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    function construirProductoParaEditar() {
+        const today = new Date().toISOString().slice(0, 10);
         return {
             id: id,
             nombre: nombre || "",
@@ -67,16 +64,22 @@ export default function ModalCrearProducto({ onClose, isOpen, onCreated, onUpdat
             codigo_Lote: codigoLote || "",
             impuestos_Aplicados: product?.impuestos_Aplicados ?? [],
             imagenUrl: imagenUrl || "",
-            id_Negocio: getNegocioIdFromLocalStorage(),
+            id_Negocio: obtenerIdNegocio(),
         };
     }
 
     function construirProducto() {
-        const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+        const hoy = new Date();
+        const yyyy = hoy.getFullYear();
+        const mm = String(hoy.getMonth() + 1).padStart(2, '0'); // Mes: 0-11
+        const dd = String(hoy.getDate()).padStart(2, '0');
+
+        const today = `${yyyy}-${mm}-${dd}`;
+
         return {
             nombre: nombre || "",
             valor: Number(valor) || 0,
-            fecha_Creacion: product?.fecha_Creacion ?? today,
+            fecha_Creacion: today,
             stock: Number(stock) || 0,
             estado: product?.estado ?? true,
             descripcion: descripcion || "",
@@ -84,7 +87,7 @@ export default function ModalCrearProducto({ onClose, isOpen, onCreated, onUpdat
             codigo_Lote: codigoLote || "",
             impuestos_Aplicados: product?.impuestos_Aplicados ?? [],
             imagenUrl: imagenUrl || "",
-            id_Negocio: getNegocioIdFromLocalStorage(),
+            id_Negocio: obtenerIdNegocio(),
         };
     }
 
@@ -92,10 +95,20 @@ export default function ModalCrearProducto({ onClose, isOpen, onCreated, onUpdat
         e.preventDefault();
         setError(null);
 
-        const negocioId = getNegocioIdFromLocalStorage();
+        const negocioId = obtenerIdNegocio();
+
+        if(valor <= 0){
+            setError("El valor debe ser mayor a 0 ");
+            return;
+        }
 
         if (!negocioId) {
             setError("No se encontró id de negocio en localStorage (cuentaUsuario)");
+            return;
+        }
+
+        if (codigoLote.length <= 3) {
+            setError("El código de lote debe tener más de 3 caracteres");
             return;
         }
 
@@ -113,7 +126,7 @@ export default function ModalCrearProducto({ onClose, isOpen, onCreated, onUpdat
                     throw new Error("No se proporcionó el producto a editar (falta product.id)");
                 }
 
-                const url = `${base}/api/Negocios/editarProducto?negocioId=${encodeURIComponent(negocioId)}`;
+                const url = `${base}/api/Negocios/${negocioId}/productos/${id}`;
                 console.log("PUT", url, payload);
 
                 const res = await fetch(url, {
@@ -131,32 +144,29 @@ export default function ModalCrearProducto({ onClose, isOpen, onCreated, onUpdat
                     }
                     throw new Error((data && data.message) || `HTTP ${res.status}`);
                 }
-
-                // try to parse response body; support 204 No Content
                 let updated = payload;
                 try {
                     const body = await res.text();
                     updated = body ? JSON.parse(body) : payload;
                 } catch (err) {
-                    // if parsing fails, fall back to payload
+
                     console.warn("Could not parse update response, falling back to payload", err);
                     updated = payload;
                 }
-                
+
                 setCreatedProduct(updated);
-                if (typeof onUpdated === "function") onUpdated(updated);
                 onClose && onClose();
             } else {
-                // create new product
+
                 const payload = construirProducto();
-                const url = `${base}/api/Negocios/agregarProducto?negocioId=${encodeURIComponent(negocioId)}`;
+                const url = `${base}/api/Negocios/${negocioId}/productos`;
                 console.log("POST", url, payload);
                 const res = await fetch(url, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(payload),
                 });
-                
+
                 let data = null;
                 try {
                     const text = await res.text();
@@ -178,7 +188,7 @@ export default function ModalCrearProducto({ onClose, isOpen, onCreated, onUpdat
             setLoading(false);
         }
     }
-    
+
     return (
         <div className="fixed z-4 inset-0 backdrop-brightness-75 border-gray-200 outline-2 bg-opacity-50 flex items-center justify-center">
             <div className="bg-white flex rounded-lg p-6 w-fit">
@@ -200,7 +210,7 @@ export default function ModalCrearProducto({ onClose, isOpen, onCreated, onUpdat
                         <button onClick={onClose} type="button" className="px-4 py-2 transition-all duration-200 bg-gray-300 rounded hover:bg-gray-400">
                             Cancelar
                         </button>
-                        <button type="submit" disabled={loading} className="px-4 py-2 transition-all duration-200 bg-green-500 text-white rounded hover:bg-green-600">
+                        <button disabled={loading} className="px-4 py-2 transition-all duration-200 bg-green-500 text-white rounded hover:bg-green-600">
                             {loading ? (type === "edit" ? "Guardando..." : "Creando...") : type === "edit" || product ? "Guardar" : "Crear"}
                         </button>
                     </div>

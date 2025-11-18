@@ -9,7 +9,7 @@ export default function TargetPlan({ plan }) {
                 ))}
             </ul>
             <p className="text-sm">por mes: ${plan.price}</p>
-            <button className="bg-[#059669] text-white py-2 px-4 w-full mt-auto rounded-md">Seleccionar</button>
+            <button className="bg-[#4f46e5] text-white py-2 px-4 w-full mt-auto rounded-md">Seleccionar</button>
         </div>
     );
 }

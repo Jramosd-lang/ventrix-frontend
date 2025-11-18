@@ -40,12 +40,13 @@ const plans = [
 ];
 
 
-export default function Login({ onLogin }) {
+export default function Login({ onLoginV, onLoginC }) {
+    
     return (
         <>
             <main className=" container-login flex gap-5 h-full w-full justify-between items-center">
                 <div className="flex  items-center w-full justify-center gap-10 max-sm:flex-col max-sm:gap-5">
-                    <LoginForm onLogin={onLogin} />
+                    <LoginForm onLoginC={onLoginC} onLoginV={onLoginV} />
                         <div className="flex flex-col h-[482px] bg-white shadow-md w-4/7 p-4 rounded-xl border-1 border-[#D1D5DC] max-sm:w-4/5">
                             <div className="h-fit w-full p-4 flex flex-col ">
                                 <div className="flex items-center gap-4 mb-2">

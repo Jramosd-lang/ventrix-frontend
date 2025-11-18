@@ -1,4 +1,4 @@
-import { XCircle, CheckCircle, CircleAlert } from "lucide-react";
+import { XCircle, CheckCircle, CircleAlert, PartyPopper } from "lucide-react";
 import { useEffect, useState } from "react";
 
 export default function Alert({ mensaje, duration = 3000, onClose, tipo }) {
@@ -34,7 +34,7 @@ export default function Alert({ mensaje, duration = 3000, onClose, tipo }) {
 
     if (!mounted) return null;
 
-    const containerClasses = `bg-white border h-fit border-[#DFDFDF] pb-5 w-90 flex items-center justify-around rounded-xl z-40 fixed top-12 left-1/2 -translate-x-1/2 transition-all duration-300 ${isShown ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 pointer-events-none'}`;
+    const containerClasses = `bg-white border h-30 border-[#DFDFDF] w-90 flex items-center justify-around rounded-xl z-40 fixed top-12 left-1/2 -translate-x-1/2 transition-all duration-300 ${isShown ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 pointer-events-none'}`;
 
     function closeNow() {
         // trigger fade-out then unmount after animDuration
@@ -47,21 +47,24 @@ export default function Alert({ mensaje, duration = 3000, onClose, tipo }) {
 
     return (
         <div className={containerClasses}>
-            {tipo === 'error' && <XCircle className="text-red-500 ml-5" size={40} />}
-            {tipo === 'success' && <CheckCircle className="text-green-500 ml-5" size={40} />}
-            {tipo === 'info' && <CircleAlert className="text-blue-500 ml-5" size={40} />}
-            <div className="pl-20 pt-4">
-                <h2 className="font-bold text-lg">{mensaje?.title}</h2>
+            <div className="w-20 h-full flex justify-center items-center">
+                {tipo === 'Celebration' && <PartyPopper className="text-yellow-500 ml-5 w-20 h-20"  />}
+                {tipo === 'error' && <XCircle className="text-red-500 ml-5 w-12 h-12" />}
+                {tipo === 'success' && <CheckCircle className="text-green-500 ml-5"  />}
+                {tipo === 'info' && <CircleAlert className="text-blue-500 ml-5"  />}
+            </div>
+            <div className="h-full w-60 py-3 flex items-start justify-center flex-col">
+                <h2 className="font-semibold text-lg">{mensaje?.title}</h2>
                 <p className="text-sm text-[#6B7280]">{mensaje?.description}</p>
             </div>
-                    <button
-                        type="button"
-                        aria-label="Cerrar alerta"
-                        onClick={closeNow}
-                        className="absolute top-2 right-3 text-gray-500 hover:text-gray-700"
-                    >
-                        ×
-                    </button>
+            <button
+                type="button"
+                aria-label="Cerrar alerta"
+                onClick={closeNow}
+                className="absolute top-2 right-3 text-gray-500 hover:text-gray-700"
+            >
+                ×
+            </button>
         </div>
     );
 }
