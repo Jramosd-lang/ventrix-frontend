@@ -3,6 +3,7 @@ import { ArrowUpDown, Package, Search, X, ChevronLeft, ChevronRight } from "luci
 import TargetProduct from "../targetProduct"
 import TargetProductCliente from "../cliente/targetProductCliente"
 import TarjetaCrearProducto from "../tarjetaCrearProducto"
+import TargetProductPrueba from "../targetProductPrueba/index"
 import ModalCrearProducto from "../modal/modalCrearProducto"
 import CarritoCompras from "../CarritoCompras"
 import Alert from "../alert"
@@ -296,7 +297,14 @@ export default function ContenedorProductos({ mode, id_negocio_comprador }) {
                         />
                     ))
                 }
-
+                {mode === "prueba-vendedor" && 
+                productosPaginados.map(p => (
+                    <TargetProductPrueba
+                        key={p.id}
+                        product={p}
+                        onAddToCart={() => manejarCarrito.añadir(p)}
+                    />
+                ))}
                 {mode === "cliente" &&
                     productosPaginados.map(p => (
                         <TargetProductCliente 

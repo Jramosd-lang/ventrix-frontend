@@ -1,14 +1,17 @@
 "use client"
 import { iniciarConexion } from '../../../utils/Conexion_hub'
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import Sidebar from "../../../components/sidebar"
 import Header from "../../../components/header"
+import ContenedorProductos from '../../../components/contenedorProductos'
 import Alert from "../../../components/alert/index"
+
 
 
 export default function PaginaPedidos() {
 
     const id_negocio = JSON.parse(localStorage.getItem("cuenta")).id_negocio;
+    const token = JSON.parse(localStorage.getItem("cuenta")).token;
     console.log("ID del negocio desde localStorage:", localStorage.getItem("cuenta").id_negocio);
     const [pedidos, setPedidos] = useState([])
     const [pedidosFiltrados, setPedidosFiltrados] = useState([])
@@ -17,18 +20,8 @@ export default function PaginaPedidos() {
     const [filtroEstado, setFiltroEstado] = useState("Todos")
     const [paginaActual, setPaginaActual] = useState(1)
     const [mostrarMenuEstado, setMostrarMenuEstado] = useState(false)
+    const [alerta, setAlerta] = useState({ mostrar: false, mensaje: '', tipo: '' })
     const pedidosPorPagina = 5
-
-    const obtenerColorEstado = (estado) => {
-        switch (estado?.toLowerCase()) {
-            case "entregado": return "bg-green-100 text-green-700"
-            case "enviado": return "bg-blue-100 text-blue-700"
-            case "pendiente": return "bg-yellow-100 text-yellow-700"
-            case "cancelado": return "bg-red-100 text-red-700"
-            default: return "bg-gray-100 text-gray-700"
-        }
-    }
-
     const obtenerPedidos = async () => {
         try {
             console.log("Obteniendo pedidos para el negocio:", id_negocio);
@@ -37,6 +30,7 @@ export default function PaginaPedidos() {
             setPedidos(Array.isArray(datos) ? datos : [datos]);
         } catch (error) {
             console.error("Error al obtener pedidos:", error);
+            setAlerta({ mostrar: true, mensaje: { title: "Error al cargar pedidos", contenido: error.message }, tipo: 'error' });
         } finally {
             setCargando(false);
         }
@@ -64,8 +58,6 @@ export default function PaginaPedidos() {
                     console.log(`Unido al negocio: ${id_Negocio}`);
                 }
 
-                // NO usar conn.off() - solo agregar el handler
-                // Usar handler con nombre para poder limpiarlo después
                 const handlerPedidos = (nuevoPedido) => {
                     console.log("PaginaPedidos - Nuevo pedido recibido:", nuevoPedido);
                     setPedidos((prev) => [...prev, nuevoPedido]);
@@ -73,7 +65,6 @@ export default function PaginaPedidos() {
 
                 conn.on("PedidoRecibido", handlerPedidos);
 
-                // Handler de evento custom
                 const manejarNuevoPedido = (e) => {
                     console.log("PaginaPedidos - Evento recibido (custom):", e.detail);
                     setPedidos((prev) => [...prev, e.detail]);
@@ -88,9 +79,8 @@ export default function PaginaPedidos() {
 
         configurarSignalR()
 
-
         return () => {
-            window.removeEventListener("nuevoPedido", () => {});
+            window.removeEventListener("nuevoPedido", () => { });
         };
     }, []);
 
@@ -107,7 +97,6 @@ export default function PaginaPedidos() {
             );
         }
         setPedidosFiltrados(filtrados);
-        // Resetear a la primera página cuando cambian los filtros
         setPaginaActual(1);
     }, [pedidos, filtroEstado, terminoBusqueda]);
 
@@ -130,7 +119,6 @@ export default function PaginaPedidos() {
     const pedidosActuales = pedidosFiltrados.slice(indicePrimerPedido, indiceUltimoPedido)
     const totalPaginas = Math.ceil(pedidosFiltrados.length / pedidosPorPagina) || 1
 
-    // Validar que la página actual sea válida
     useEffect(() => {
         if (paginaActual > totalPaginas && totalPaginas > 0) {
             setPaginaActual(totalPaginas);
@@ -140,43 +128,102 @@ export default function PaginaPedidos() {
     const cambiarPagina = (numero) => {
         if (numero >= 1 && numero <= totalPaginas) {
             setPaginaActual(numero);
-            // Scroll suave hacia arriba de la tabla
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
     }
 
-    // Función para generar los números de página a mostrar
     const obtenerNumerosPagina = () => {
         const paginas = [];
-        const paginasVisibles = 5; // Número de botones de página a mostrar
-        
+        const paginasVisibles = 5;
+
         if (totalPaginas <= paginasVisibles) {
-            // Si hay pocas páginas, mostrar todas
             for (let i = 1; i <= totalPaginas; i++) {
                 paginas.push(i);
             }
         } else {
-            // Mostrar páginas alrededor de la actual
             let inicio = Math.max(1, paginaActual - Math.floor(paginasVisibles / 2));
             let fin = Math.min(totalPaginas, inicio + paginasVisibles - 1);
-            
-            // Ajustar si estamos cerca del final
+
             if (fin - inicio < paginasVisibles - 1) {
                 inicio = Math.max(1, fin - paginasVisibles + 1);
             }
-            
+
             for (let i = inicio; i <= fin; i++) {
                 paginas.push(i);
             }
         }
-        
+
         return paginas;
     }
+
+    // FUNCIÓN CORREGIDA
+    const handlerEstado = useCallback(async (pedido, nuevoEstado) => {
+        console.log(`Cambiando estado del pedido ${pedido.id} de "${pedido.estado}" a "${nuevoEstado}"`);
+        try {
+
+            const url = `https://localhost:7012/api/Pedidoes/cambiar-estado`;
+
+            const respuesta = await fetch(url, {
+                method: "PUT",
+                headers: {
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${token}`
+                    }
+
+                },
+                body: JSON.stringify({ id_Pedido: pedido.id, nuevo_Estado: nuevoEstado })
+            });
+
+
+            if (!respuesta.ok) {
+                throw new Error(`Error al actualizar estado: ${respuesta.status}`);
+            }
+
+            // Actualizar el estado local
+            setPedidos(prevPedidos =>
+                prevPedidos.map(p =>
+                    p.id === pedido.id
+                        ? { ...p, estado: nuevoEstado }
+                        : p
+                )
+            );
+
+
+            // Ocultar alerta después de 3 segundos
+            setTimeout(() => {
+                setAlerta({ mostrar: false, mensaje: '', tipo: '' });
+            }, 3000);
+
+        } catch (error) {
+            console.error("Error al cambiar estado del pedido:", error);
+
+            // Mostrar mensaje de error
+            setAlerta({
+                mostrar: true,
+                mensaje: { title: "Error al actualizar el estado del pedido", contenido: error.message },
+                tipo: 'error'
+            });
+
+            // Ocultar alerta después de 3 segundos
+            setTimeout(() => {
+                setAlerta({ mostrar: false, mensaje: '', tipo: '' });
+            }, 3000);
+        }
+    }, [setPedidos, setAlerta]);
 
     return (
         <div className="min-h-screen bg-gray-50 p-8 pt-22">
             <Sidebar />
             <Header />
+
+            {/* Alerta */}
+            {alerta.mostrar && (
+                <div className="fixed top-4 right-4 z-50">
+                    <Alert tipo={alerta.tipo} mensaje={alerta.mensaje} />
+                </div>
+            )}
+
             <div className="max-w-7xl mx-auto">
                 <div className="flex items-center justify-between mb-8">
                     <h1 className="text-3xl font-bold text-gray-900">Pedidos</h1>
@@ -295,13 +342,21 @@ export default function PaginaPedidos() {
                                                     {formatearFecha(pedido.fecha_Creacion)}
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
-                                                    <span
-                                                        className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${obtenerColorEstado(
-                                                            pedido.estado
-                                                        )}`}
+                                                    <select
+                                                        value={pedido.estado}
+                                                        onChange={(e) => { console.log('select change', pedido.id, e.target.value); handlerEstado(pedido, e.target.value) }}
+                                                        className='w-full px-2 py-1 text-sm text-black border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500'
+                                                        id={`estado-pedido-${pedido.id}`}
                                                     >
-                                                        {pedido.estado || "Desconocido"}
-                                                    </span>
+                                                        <option value="pendiente">Pendiente</option>
+                                                        <option value="pagado">Pagado</option>
+                                                        <option value="preparando">Preparando</option>
+                                                        <option value="enviado">Enviado</option>
+                                                        <option value="entregado">Entregado</option>
+                                                        <option value="cancelado">Cancelado</option>
+                                                        <option value="reembolsado">Reembolsado</option>
+                                                        <option value="fallido">Fallido</option>
+                                                    </select>
                                                 </td>
                                                 <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-900'>
                                                     {pedido.direccion_Envio}
@@ -332,22 +387,21 @@ export default function PaginaPedidos() {
                                         className="h-9 w-9 flex items-center justify-center border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                         aria-label="Página anterior"
                                     >
-                                        <svg 
-                                            className="w-5 h-5 text-gray-600" 
-                                            fill="none" 
-                                            stroke="currentColor" 
+                                        <svg
+                                            className="w-5 h-5 text-gray-600"
+                                            fill="none"
+                                            stroke="currentColor"
                                             viewBox="0 0 24 24"
                                         >
-                                            <path 
-                                                strokeLinecap="round" 
-                                                strokeLinejoin="round" 
-                                                strokeWidth={2} 
-                                                d="M15 19l-7-7 7-7" 
+                                            <path
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                                strokeWidth={2}
+                                                d="M15 19l-7-7 7-7"
                                             />
                                         </svg>
                                     </button>
 
-                                    {/* Mostrar primera página si no está visible */}
                                     {obtenerNumerosPagina()[0] > 1 && (
                                         <>
                                             <button
@@ -362,22 +416,19 @@ export default function PaginaPedidos() {
                                         </>
                                     )}
 
-                                    {/* Páginas visibles */}
                                     {obtenerNumerosPagina().map((numeroPagina) => (
                                         <button
                                             key={numeroPagina}
                                             onClick={() => cambiarPagina(numeroPagina)}
-                                            className={`h-9 w-9 flex items-center justify-center rounded-md transition-colors ${
-                                                paginaActual === numeroPagina
-                                                    ? "bg-blue-600 text-white hover:bg-blue-700 font-medium"
-                                                    : "border border-gray-300 hover:bg-gray-50 text-gray-700"
-                                            }`}
+                                            className={`h-9 w-9 flex items-center justify-center rounded-md transition-colors ${paginaActual === numeroPagina
+                                                ? "bg-blue-600 text-white hover:bg-blue-700 font-medium"
+                                                : "border border-gray-300 hover:bg-gray-50 text-gray-700"
+                                                }`}
                                         >
                                             {numeroPagina}
                                         </button>
                                     ))}
 
-                                    {/* Mostrar última página si no está visible */}
                                     {obtenerNumerosPagina()[obtenerNumerosPagina().length - 1] < totalPaginas && (
                                         <>
                                             {obtenerNumerosPagina()[obtenerNumerosPagina().length - 1] < totalPaginas - 1 && (
@@ -398,17 +449,17 @@ export default function PaginaPedidos() {
                                         className="h-9 w-9 flex items-center justify-center border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                         aria-label="Página siguiente"
                                     >
-                                        <svg 
-                                            className="w-5 h-5 text-gray-600" 
-                                            fill="none" 
-                                            stroke="currentColor" 
+                                        <svg
+                                            className="w-5 h-5 text-gray-600"
+                                            fill="none"
+                                            stroke="currentColor"
                                             viewBox="0 0 24 24"
                                         >
-                                            <path 
-                                                strokeLinecap="round" 
-                                                strokeLinejoin="round" 
-                                                strokeWidth={2} 
-                                                d="M9 5l7 7-7 7" 
+                                            <path
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                                strokeWidth={2}
+                                                d="M9 5l7 7-7 7"
                                             />
                                         </svg>
                                     </button>
@@ -416,6 +467,53 @@ export default function PaginaPedidos() {
                             </div>
                         </>
                     )}
+                </div>
+                <div className="min-h-screen bg-gray-50 p-6">
+                    <div className="mx-auto max-w-7xl mt-15 space-y-6">
+                        <h2 className='text-xl font-semibold'>Crear pedidos</h2>
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="relative flex-1">
+                                <input
+                                    type="text"
+                                    placeholder="Buscar productos..."
+                                    className="w-full rounded-lg border border-gray-300 py-3 pl-12 pr-4 text-gray-900 placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                                <svg
+                                    className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                >
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                                    />
+                                </svg>
+                            </div>
+
+                            <div className="flex items-center gap-3">
+                                <button className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                                    </svg>
+                                    Ordenar
+                                </button>
+
+                                <button className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                                    </svg>
+                                    Disponibles
+                                </button>
+
+                                <span className="text-sm text-gray-600">9 productos</span>
+                            </div>
+                        </div>
+
+                        <ContenedorProductos tipo="prueba-vendedor" id_negocio_comprador={id_negocio} />
+                    </div>
                 </div>
             </div>
         </div>
